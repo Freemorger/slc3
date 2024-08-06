@@ -38,6 +38,8 @@ func main() {
 				fmt.Print("Server > ")
 				text := consoleScanner.Text()
 				if strings.ToLower(text) == "exit" {
+					conn.Write([]byte("Server is closing."))
+					conn.Close()
 					os.Exit(0)
 				}
 				_, err := conn.Write([]byte("SERVER: " + text + "\n"))
@@ -60,6 +62,11 @@ func handleRequest(conn net.Conn) {
 	for scanner.Scan() {
 		clientMessage := scanner.Text()
 		fmt.Println(conn.RemoteAddr(), ": ", clientMessage)
+		_, err := conn.Write([]byte(conn.RemoteAddr().String() + ": " + clientMessage))
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 	}
 
 	if err := scanner.Err(); err != nil {

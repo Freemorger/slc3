@@ -30,7 +30,7 @@ func main() {
 			fmt.Print("You > ")
 			text := consoleScanner.Text()
 			if strings.ToLower(text) == "exit" {
-				os.Exit(0)
+				disconnect(conn)
 			}
 			_, err := conn.Write([]byte(text + "\n"))
 			if err != nil {
@@ -53,8 +53,14 @@ func ConReader(conn net.Conn) {
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		fmt.Println()
+		fmt.Println("")
 		fmt.Print(response)
 	}
 
+}
+
+func disconnect(conn net.Conn) {
+	conn.Write([]byte(conn.LocalAddr().String() + " disconnected"))
+	conn.Close()
+	os.Exit(0)
 }
