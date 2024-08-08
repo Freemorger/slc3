@@ -9,36 +9,59 @@ import (
 	"strings"
 )
 
+type ClientSelf struct {
+	connection net.Conn
+	name       string
+}
+
 func main() {
 	// Server info for connection
 	const HOST_NAME = "localhost"
 	const HOST_PORT = 8081
 	const CONN_TYPE = "tcp"
-	var domain = (HOST_NAME + ":" + strconv.Itoa(HOST_PORT))
+	var clientName string
+	var client ClientSelf
 
+	fmt.Print("Enter your name: ")
+	fmt.Scanln(&clientName)
+	client = connectToServer(HOST_NAME, HOST_PORT, CONN_TYPE, clientName)
+	defer disconnect(client)
+
+	go ConReader(client)
+	ConWriter(client)
+
+}
+
+func connectToServer(hostname string, port int, conntype string,
+	clientname string) (client ClientSelf) {
+	var domain = (hostname + ":" + strconv.Itoa(port))
 	// Connect to server
-	conn, err := net.Dial(CONN_TYPE, domain)
+	connection, err := net.Dial(conntype, domain)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error connecting to server: " + err.Error())
 		os.Exit(1)
 	}
+	connection.Write([]byte(clientname))
 	fmt.Println("Connected to server: ", domain)
-	defer conn.Close()
-	go ConReader(conn)
+	clientself := ClientSelf{connection: connection, name: clientname}
+	return clientself
+}
+
+func ConWriter(client ClientSelf) {
+	consoleScanner := bufio.NewScanner(os.Stdin)
 	fmt.Print("You > ")
 	// Loop for reading user input
 	for {
-		consoleScanner := bufio.NewScanner(os.Stdin)
 		for consoleScanner.Scan() {
 			fmt.Print("You > ")
 			text := consoleScanner.Text()
 			if strings.ToLower(text) == "exit" {
-				disconnect(conn)
+				disconnect(client)
 			}
-			_, err := conn.Write([]byte(text + "\n"))
+			_, err := client.connection.Write([]byte(text + "\n"))
 			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
+				fmt.Println("Sending message error: ", err.Error())
+				continue
 			}
 		}
 
@@ -46,12 +69,11 @@ func main() {
 			fmt.Println("Error reading from terminal: ", err.Error())
 		}
 	}
-
 }
 
-func ConReader(conn net.Conn) { // func for getting server messages
+func ConReader(client ClientSelf) { // func for getting server messages
 	for {
-		response, err := bufio.NewReader(conn).ReadString('\n')
+		response, err := bufio.NewReader(client.connection).ReadString('\n')
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -62,8 +84,8 @@ func ConReader(conn net.Conn) { // func for getting server messages
 
 }
 
-func disconnect(conn net.Conn) {
-	conn.Write([]byte(conn.LocalAddr().String() + " disconnected"))
-	conn.Close()
+func disconnect(client ClientSelf) {
+	client.connection.Write([]byte(client.name + " disconnected"))
+	client.connection.Close()
 	os.Exit(0)
 }

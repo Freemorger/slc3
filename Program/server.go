@@ -9,12 +9,20 @@ import (
 	"strings"
 )
 
+type TCPClient struct {
+	connection net.Conn
+	addr       net.Addr
+	name       string
+}
+
 func main() {
 	// Server info
 	const NAME = "localhost"
 	const PORT = 8081
 	const CONN_TYPE = "tcp"
 	var domain = (NAME + ":" + strconv.Itoa(PORT))
+	var clients []TCPClient
+	var newClient TCPClient
 
 	// Start server
 	listener, err := net.Listen(CONN_TYPE, domain)
@@ -29,45 +37,26 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			fmt.Println("Error while client tried to connect: ", err.Error())
+			continue
 		}
+		defer conn.Close()
 		fmt.Println("New connection estabilished: ", conn.RemoteAddr().String())
-		go handleRequest(conn)
-		fmt.Print("Server > ")
-		consoleScanner := bufio.NewScanner(os.Stdin)
-		// Loop for reading user input
-		for {
-			for consoleScanner.Scan() {
-				fmt.Print("Server > ")
-				text := consoleScanner.Text()
-				if strings.ToLower(text) == "exit" {
-					//conn.Write([]byte("Server is closing."))
-					conn.Close()
-					os.Exit(0)
-				}
-				_, err := conn.Write([]byte("SERVER: " + text + "\n"))
-				if err != nil {
-					fmt.Println(err)
-					os.Exit(1)
-				}
-			}
+		newClient = newClientTCP(conn)
+		clients = append(clients, newClient)
 
-			if err := consoleScanner.Err(); err != nil {
-				fmt.Println("Error reading from terminal: ", err.Error())
-			}
-		}
+		go handleRequest(clients[len(clients)-1])
+		//go readConsole(clients[len(clients) - 1])
 	}
 }
 
 // Func for handling user requests (including messages as well)
-func handleRequest(conn net.Conn) {
-	defer conn.Close()
-	scanner := bufio.NewScanner(conn)
-	for scanner.Scan() {
-		clientMessage := scanner.Text()
-		fmt.Println(conn.RemoteAddr(), ": ", clientMessage)
+func handleRequest(client TCPClient) {
 
+	scanner := bufio.NewScanner(client.connection)
+	for scanner.Scan() {
+		clientsMessage := scanner.Text()
+		fmt.Println(client.name, ": ", clientsMessage)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -75,11 +64,41 @@ func handleRequest(conn net.Conn) {
 	}
 }
 
-/*
-_, err := conn.Write([]byte(conn.RemoteAddr().String() + ": " +
-		clientMessage + "\n"))
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+func readConsole(client TCPClient) {
+	fmt.Print("Server > ")
+	consoleScanner := bufio.NewScanner(os.Stdin)
+	// Loop for reading user input
+	for {
+		for consoleScanner.Scan() {
+			fmt.Print("Server > ")
+			text := consoleScanner.Text()
+			if strings.ToLower(text) == "exit" {
+				client.connection.Close()
+				os.Exit(0)
+			}
+			_, err := client.connection.Write([]byte("SERVER: " + text + "\n"))
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
 		}
-*/
+
+		if err := consoleScanner.Err(); err != nil {
+			fmt.Println("Error reading from terminal: ", err.Error())
+		}
+	}
+}
+
+func newClientTCP(conn net.Conn) TCPClient {
+	client := TCPClient{connection: conn, addr: conn.RemoteAddr()}
+	buf := make([]byte, 1024)
+	dat, err := conn.Read(buf)
+	if err != nil {
+		fmt.Println("Getting client name error: ", err.Error())
+		client.name = client.addr.String()
+	} else {
+		client.name = string(buf[:dat])
+	}
+
+	return client
+}
