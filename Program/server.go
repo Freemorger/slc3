@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+var clients []TCPClient
+
 type TCPClient struct {
 	connection net.Conn
 	addr       net.Addr
@@ -21,7 +23,6 @@ func main() {
 	const PORT = 8081
 	const CONN_TYPE = "tcp"
 	var domain = (NAME + ":" + strconv.Itoa(PORT))
-	var clients []TCPClient
 	var newClient TCPClient
 
 	// Start server
@@ -57,6 +58,7 @@ func handleRequest(client TCPClient) {
 	for scanner.Scan() {
 		clientsMessage := scanner.Text()
 		fmt.Println(client.name, ": ", clientsMessage)
+		globalSend(clientsMessage)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -89,6 +91,18 @@ func readConsole(client TCPClient) {
 	}
 }
 
+func globalSend(msg string) {
+	for _, curClient := range clients {
+		_, err := curClient.connection.Write([]byte(curClient.name + ": " + msg))
+		if err != nil {
+			fmt.Println("Error resending: ", err, ". Disconnecting ", curClient.name)
+			curClient.connection.Close()
+			removeClientTCP(curClient)
+			continue
+		}
+	}
+}
+
 func newClientTCP(conn net.Conn) TCPClient {
 	client := TCPClient{connection: conn, addr: conn.RemoteAddr()}
 	buf := make([]byte, 1024)
@@ -101,4 +115,12 @@ func newClientTCP(conn net.Conn) TCPClient {
 	}
 
 	return client
+}
+
+func removeClientTCP(client TCPClient) {
+	for i, v := range clients {
+		if v == client {
+			clients = append(clients[:i], clients[i+1:]...)
+		}
+	}
 }

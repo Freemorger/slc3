@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type ClientSelf struct {
@@ -72,14 +73,16 @@ func ConWriter(client ClientSelf) {
 }
 
 func ConReader(client ClientSelf) { // func for getting server messages
+	fmt.Println(client.connection.RemoteAddr())
+	buf := make([]byte, 1024)
 	for {
-		response, err := bufio.NewReader(client.connection).ReadString('\n')
+		response, err := client.connection.Read(buf)
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			fmt.Println("Error while reading server msg: ", err.Error())
+			time.Sleep(1 * time.Second)
+			continue
 		}
-		fmt.Println("")
-		fmt.Print(response)
+		fmt.Println(string(buf[:response]))
 	}
 
 }
